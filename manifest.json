@@ -1,0 +1,23 @@
+{
+  "name": "MYSIR ASM 2026 Lead Scanner",
+  "short_name": "Lead Scanner",
+  "description": "Vendor lead collection app for MYSIR Annual Scientific Meeting 2026",
+  "start_url": "/lead-scanner/",
+  "scope": "/lead-scanner/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1b3e",
+  "theme_color": "#0d1b3e",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
