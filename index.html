@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Lead Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0f1117;
+      --surface: #1a1d27;
+      --card:    #22263a;
+      --border:  #2e3350;
+      --accent:  #4f7bff;
+      --accent2: #6ee7b7;
+      --danger:  #f87171;
+      --warn:    #fbbf24;
+      --text:    #e8eaf6;
+      --muted:   #8892b0;
+      --radius:  12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+    }
+
+    .view { display: none; flex-direction: column; min-height: 100vh; }
+    .view.active { display: flex; }
+
+    /* Header */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .header-title { font-size: 15px; font-weight: 600; }
+    .header-vendor { font-size: 12px; color: var(--accent2); }
+
+    /* Nav */
+    .nav {
+      display: flex;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+    }
+    .nav-btn {
+      flex: 1; padding: 12px 0 10px;
+      background: none; border: none;
+      color: var(--muted); font-size: 11px; font-weight: 500;
+      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      transition: color .2s;
+    }
+    .nav-btn.active { color: var(--accent); }
+    .nav-btn svg { width: 20px; height: 20px; }
+    .badge {
+      background: var(--accent); color: #fff;
+      font-size: 11px; font-weight: 700;
+      padding: 2px 7px; border-radius: 20px;
+      margin-left: 4px;
+    }
+
+    /* Login */
+    #loginView { justify-content: center; align-items: center; padding: 32px 24px; }
+    .login-box {
+      width: 100%; max-width: 380px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px 28px;
+    }
+    .login-logo { text-align: center; margin-bottom: 28px; }
+    .login-logo .icon {
+      width: 56px; height: 56px;
+      background: var(--accent); border-radius: 16px;
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-bottom: 12px;
+    }
+    .login-logo h1 { font-size: 20px; font-weight: 700; }
+    .login-logo p { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s;
+      margin-bottom: 16px;
+    }
+    input:focus { border-color: var(--accent); }
+
+    .btn {
+      width: 100%; padding: 13px;
+      border: none; border-radius: 8px;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: opacity .2s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn:active { opacity: .7; }
+    .btn-primary  { background: var(--accent); color: #fff; }
+    .btn-secondary{ background: var(--card); color: var(--text); border: 1px solid var(--border); }
+    .btn-success  { background: var(--accent2); color: #0f1117; }
+    .btn-small    { width: auto; padding: 8px 16px; font-size: 13px; }
+
+    #loginError {
+      background: rgba(248,113,113,.12);
+      border: 1px solid rgba(248,113,113,.3);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px; color: var(--danger);
+      margin-bottom: 16px; display: none;
+    }
+
+    /* Scanner */
+    #scannerView { padding-bottom: 72px; }
+    .scanner-content { flex: 1; padding: 16px; }
+
+    #reader {
+      width: 100%; max-width: 420px;
+      margin: 0 auto;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--card);
+      border: 1px solid var(--border);
+    }
+    #reader video { width: 100% !important; }
+    #reader img { display: none !important; }
+
+    .result-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin: 16px auto;
+      max-width: 420px;
+      display: none;
+    }
+    .result-card.show { display: block; }
+    .result-card.success { border-color: var(--accent2); }
+    .result-card.error   { border-color: var(--danger); }
+    .result-card.warn    { border-color: var(--warn); }
+
+    .result-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 16px;
+    }
+    .result-header .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .dot-green  { background: var(--accent2); }
+    .dot-red    { background: var(--danger); }
+    .dot-yellow { background: var(--warn); }
+    .result-header h3 { font-size: 15px; font-weight: 600; }
+    .result-header p  { font-size: 12px; color: var(--muted); }
+
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .field { display: flex; flex-direction: column; gap: 3px; }
+    .field.full { grid-column: 1 / -1; }
+    .field-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .field-value { font-size: 13px; font-weight: 500; word-break: break-word; }
+    .result-actions { display: flex; gap: 10px; }
+    .result-actions .btn { flex: 1; }
+
+    .scan-hint {
+      text-align: center; color: var(--muted); font-size: 13px;
+      padding: 12px 0; max-width: 420px; margin: 0 auto;
+    }
+
+    .manual-section { max-width: 420px; margin: 8px auto 0; }
+    .manual-toggle {
+      background: none; border: none; color: var(--muted);
+      font-size: 12px; cursor: pointer; padding: 8px 0;
+      text-decoration: underline; display: block; margin: 0 auto;
+    }
+    .manual-input-row { display: none; gap: 8px; margin-top: 8px; }
+    .manual-input-row.show { display: flex; }
+    .manual-input-row input { margin-bottom: 0; flex: 1; }
+
+    /* Leads */
+    #leadsView { padding-bottom: 72px; }
+    .leads-content { flex: 1; padding: 16px; }
+    .leads-toolbar {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 16px;
+    }
+    .leads-count { font-size: 13px; color: var(--muted); }
+    .leads-count span { color: var(--text); font-weight: 700; }
+
+    .lead-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px; margin-bottom: 10px;
+    }
+    .lead-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .lead-name { font-size: 15px; font-weight: 600; }
+    .lead-time { font-size: 11px; color: var(--muted); }
+    .lead-details { display: flex; flex-direction: column; gap: 4px; }
+    .lead-detail { font-size: 12px; color: var(--muted); }
+    .lead-detail span { color: var(--text); }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-state p { font-size: 13px; margin-top: 8px; }
+
+    /* Loading */
+    .loading {
+      position: fixed; inset: 0;
+      background: rgba(15,17,23,.85);
+      display: none; align-items: center; justify-content: center;
+      z-index: 999;
+    }
+    .loading.show { display: flex; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 80px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 20px;
+      font-size: 13px; font-weight: 500;
+      z-index: 998; opacity: 0; transition: all .3s; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.ok  { border-color: var(--accent2); color: var(--accent2); }
+    .toast.err { border-color: var(--danger); color: var(--danger); }
+  </style>
+</head>
+<body>
+
+<div class="loading" id="loading"><div class="spinner"></div></div>
+<div class="toast" id="toast"></div>
+
+<!-- LOGIN -->
+<div class="view active" id="loginView">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="icon">
+        <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#fff" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4L2 9l10 5 10-5-10-5zM2 14l10 5 10-5M2 19l10 5 10-5"/>
+        </svg>
+      </div>
+      <h1>Lead Scanner</h1>
+      <p>Vendor Portal</p>
+    </div>
+    <div id="loginError"></div>
+    <label>Username</label>
+    <input type="text" id="inputUser" placeholder="Enter username" autocomplete="off">
+    <label>Password</label>
+    <input type="password" id="inputPass" placeholder="Enter password">
+    <button class="btn btn-primary" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+
+<!-- SCANNER -->
+<div class="view" id="scannerView">
+  <div class="header">
+    <div>
+      <div class="header-title">QR Scanner</div>
+      <div class="header-vendor" id="scanVendorLabel"></div>
+    </div>
+    <button class="btn btn-secondary btn-small" onclick="doLogout()">Logout</button>
+  </div>
+  <div class="scanner-content">
+    <div id="reader"></div>
+    <p class="scan-hint" id="scanHint">Point camera at participant QR code</p>
+    <div class="result-card" id="resultCard">
+      <div class="result-header">
+        <div class="dot" id="resultDot"></div>
+        <div><h3 id="resultTitle"></h3><p id="resultSub"></p></div>
+      </div>
+      <div class="field-grid" id="resultFields"></div>
+      <div class="result-actions" id="resultActions"></div>
+    </div>
+    <div class="manual-section">
+      <button class="manual-toggle" onclick="toggleManual()">Enter ID manually</button>
+      <div class="manual-input-row" id="manualRow">
+        <input type="text" id="manualId" placeholder="Participant ID" inputmode="numeric">
+        <button class="btn btn-primary btn-small" onclick="lookupManual()">Search</button>
+      </div>
+    </div>
+  </div>
+  <nav class="nav">
+    <button class="nav-btn active" id="tabScanner" onclick="showTab('scanner')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3z"/>
+        <path stroke-linecap="round" d="M15 15h2m4 0h-2m-2 4v2m0-6v2m4 2h-2"/>
+      </svg>
+      Scanner
+    </button>
+    <button class="nav-btn" id="tabLeads" onclick="showTab('leads')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+      </svg>
+      Leads<span class="badge" id="leadsCount">0</span>
+    </button>
+  </nav>
+</div>
+
+<!-- LEADS -->
+<div class="view" id="leadsView">
+  <div class="header">
+    <div>
+      <div class="header-title">My Leads</div>
+      <div class="header-vendor" id="leadsVendorLabel"></div>
+    </div>
+    <button class="btn btn-secondary btn-small" onclick="exportCSV()">Export</button>
+  </div>
+  <div class="leads-content">
+    <div class="leads-toolbar">
+      <div class="leads-count">Total: <span id="leadsTotal">0</span> contacts</div>
+      <button class="btn btn-secondary btn-small" onclick="loadLeads()">Refresh</button>
+    </div>
+    <div id="leadsList"></div>
+  </div>
+  <nav class="nav">
+    <button class="nav-btn" id="tabScanner2" onclick="showTab('scanner')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3z"/>
+        <path stroke-linecap="round" d="M15 15h2m4 0h-2m-2 4v2m0-6v2m4 2h-2"/>
+      </svg>
+      Scanner
+    </button>
+    <button class="nav-btn active" id="tabLeads2" onclick="showTab('leads')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+      </svg>
+      Leads<span class="badge" id="leadsCount2">0</span>
+    </button>
+  </nav>
+</div>
+
+<script>
+// ============================================================
+// CONFIG - paste your Apps Script URL here after deploying
+// ============================================================
+const API_URL = 'YOUR_APPS_SCRIPT_URL_HERE';
+// ============================================================
+
+let vendorName = null;
+let qrScanner  = null;
+let scannerRunning = false;
+let currentParticipant = null;
+let allLeads = [];
+
+// ── API Helper ───────────────────────────────────────────────
+async function callAPI(params) {
+  const url = new URL(API_URL);
+  Object.entries(params).forEach(function([k, v]) {
+    url.searchParams.set(k, typeof v === 'object' ? encodeURIComponent(JSON.stringify(v)) : v);
+  });
+  const res = await fetch(url.toString(), { redirect: 'follow' });
+  return res.json();
+}
+
+// ── Login ────────────────────────────────────────────────────
+async function doLogin() {
+  const user = document.getElementById('inputUser').value.trim();
+  const pass = document.getElementById('inputPass').value.trim();
+  if (!user || !pass) { showLoginError('Enter username and password.'); return; }
+
+  showLoading(true);
+  try {
+    const res = await callAPI({ action: 'login', u: user, p: pass });
+    showLoading(false);
+    if (res.success) {
+      vendorName = res.vendorName;
+      document.getElementById('scanVendorLabel').textContent = vendorName;
+      document.getElementById('leadsVendorLabel').textContent = vendorName;
+      showView('scannerView');
+      startScanner();
+      loadLeads();
+    } else {
+      showLoginError(res.message || 'Login failed.');
+    }
+  } catch(e) {
+    showLoading(false);
+    showLoginError('Connection error. Check API_URL config.');
+  }
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+document.getElementById('inputPass').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doLogin();
+});
+
+// ── Scanner ──────────────────────────────────────────────────
+function startScanner() {
+  if (scannerRunning) return;
+  qrScanner = new Html5Qrcode('reader');
+  qrScanner.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 240, height: 240 } },
+    onScanSuccess,
+    function() {}
+  ).then(function() {
+    scannerRunning = true;
+    document.getElementById('scanHint').textContent = 'Point camera at participant QR code';
+  }).catch(function(err) {
+    document.getElementById('scanHint').textContent = 'Camera unavailable. Use manual entry below. (' + err + ')';
+  });
+}
+
+function stopScanner() {
+  if (qrScanner && scannerRunning) {
+    qrScanner.stop().then(function() {
+      qrScanner.clear();
+      scannerRunning = false;
+    }).catch(function(){});
+  }
+}
+
+function onScanSuccess(decodedText) {
+  if (qrScanner && scannerRunning) qrScanner.pause();
+  document.getElementById('scanHint').textContent = 'Looking up...';
+  processId(decodedText);
+}
+
+// ── Manual Entry ─────────────────────────────────────────────
+function toggleManual() {
+  const row = document.getElementById('manualRow');
+  row.classList.toggle('show');
+  if (row.classList.contains('show')) document.getElementById('manualId').focus();
+}
+
+function lookupManual() {
+  const val = document.getElementById('manualId').value.trim();
+  if (!val) { showToast('Enter a participant ID', 'err'); return; }
+  processId(val);
+}
+
+document.getElementById('manualId').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') lookupManual();
+});
+
+// ── Lookup ───────────────────────────────────────────────────
+async function processId(rawId) {
+  let id = rawId.trim();
+  // If somehow a full URL is scanned, extract text= param
+  try {
+    const u = new URL(rawId);
+    const t = u.searchParams.get('text');
+    if (t) id = t.trim();
+  } catch(e) {}
+
+  showLoading(true);
+  try {
+    const res = await callAPI({ action: 'lookup', id: id });
+    showLoading(false);
+    if (res.found) {
+      currentParticipant = res.participant;
+      showResultFound(res.participant);
+    } else {
+      showResultError(res.message || 'Not found.');
+      if (qrScanner && scannerRunning) qrScanner.resume();
+    }
+  } catch(e) {
+    showLoading(false);
+    showResultError('Connection error.');
+    if (qrScanner && scannerRunning) qrScanner.resume();
+  }
+}
+
+function showResultFound(p) {
+  document.getElementById('scanHint').textContent = 'Review and save contact';
+  const card = document.getElementById('resultCard');
+  card.className = 'result-card show success';
+  document.getElementById('resultDot').className = 'dot dot-green';
+  document.getElementById('resultTitle').textContent = p.name || 'Unknown';
+  document.getElementById('resultSub').textContent = p.email || '';
+  document.getElementById('resultFields').innerHTML = `
+    <div class="field"><div class="field-label">Contact</div><div class="field-value">${p.contact||'-'}</div></div>
+    <div class="field"><div class="field-label">Profession</div><div class="field-value">${p.profession||'-'}</div></div>
+    <div class="field"><div class="field-label">Department</div><div class="field-value">${p.department||'-'}</div></div>
+    <div class="field full"><div class="field-label">Institute</div><div class="field-value">${p.institute||'-'}</div></div>
+  `;
+  document.getElementById('resultActions').innerHTML = `
+    <button class="btn btn-success" onclick="doSave()">Save Contact</button>
+    <button class="btn btn-secondary" onclick="dismissResult()">Cancel</button>
+  `;
+}
+
+function showResultError(msg) {
+  const card = document.getElementById('resultCard');
+  card.className = 'result-card show error';
+  document.getElementById('resultDot').className = 'dot dot-red';
+  document.getElementById('resultTitle').textContent = 'Not Found';
+  document.getElementById('resultSub').textContent = msg;
+  document.getElementById('resultFields').innerHTML = '';
+  document.getElementById('resultActions').innerHTML = `
+    <button class="btn btn-secondary" onclick="dismissResult()">Try Again</button>
+  `;
+  document.getElementById('scanHint').textContent = 'Point camera at participant QR code';
+}
+
+function showResultDuplicate(msg) {
+  const card = document.getElementById('resultCard');
+  card.className = 'result-card show warn';
+  document.getElementById('resultDot').className = 'dot dot-yellow';
+  document.getElementById('resultTitle').textContent = 'Already Collected';
+  document.getElementById('resultSub').textContent = msg;
+  document.getElementById('resultFields').innerHTML = '';
+  document.getElementById('resultActions').innerHTML = `
+    <button class="btn btn-secondary" onclick="dismissResult()">OK</button>
+  `;
+}
+
+function dismissResult() {
+  document.getElementById('resultCard').className = 'result-card';
+  document.getElementById('manualId').value = '';
+  document.getElementById('scanHint').textContent = 'Point camera at participant QR code';
+  currentParticipant = null;
+  if (qrScanner && scannerRunning) qrScanner.resume();
+}
+
+// ── Save ─────────────────────────────────────────────────────
+async function doSave() {
+  if (!currentParticipant) return;
+  showLoading(true);
+  try {
+    const res = await callAPI({ action: 'save', vendor: vendorName, data: currentParticipant });
+    showLoading(false);
+    if (res.success) {
+      dismissResult();
+      showToast('Contact saved!', 'ok');
+      loadLeads();
+    } else if (res.duplicate) {
+      showResultDuplicate(res.message);
+    } else {
+      showToast(res.message || 'Save failed', 'err');
+    }
+  } catch(e) {
+    showLoading(false);
+    showToast('Save failed. Check connection.', 'err');
+  }
+}
+
+// ── Leads ────────────────────────────────────────────────────
+async function loadLeads() {
+  try {
+    const res = await callAPI({ action: 'leads', vendor: vendorName });
+    if (res.success) {
+      allLeads = res.leads;
+      renderLeads(allLeads);
+      updateCount(allLeads.length);
+    }
+  } catch(e) {}
+}
+
+function renderLeads(leads) {
+  document.getElementById('leadsTotal').textContent = leads.length;
+  const list = document.getElementById('leadsList');
+  if (leads.length === 0) {
+    list.innerHTML = `<div class="empty-state">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#8892b0" stroke-width="1.5">
+        <path stroke-linecap="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+      </svg>
+      <p>No leads yet. Start scanning!</p></div>`;
+    return;
+  }
+  list.innerHTML = leads.map(function(l) { return `
+    <div class="lead-card">
+      <div class="lead-card-top">
+        <div class="lead-name">${l.name}</div>
+        <div class="lead-time">${l.timestamp}</div>
+      </div>
+      <div class="lead-details">
+        <div class="lead-detail">Email: <span>${l.email||'-'}</span></div>
+        <div class="lead-detail">Contact: <span>${l.contact||'-'}</span></div>
+        <div class="lead-detail">Profession: <span>${l.profession||'-'}</span></div>
+        <div class="lead-detail">Institute: <span>${l.institute||'-'}</span></div>
+      </div>
+    </div>`; }).join('');
+}
+
+function updateCount(n) {
+  document.getElementById('leadsCount').textContent = n;
+  document.getElementById('leadsCount2').textContent = n;
+}
+
+// ── Export CSV ───────────────────────────────────────────────
+function exportCSV() {
+  if (allLeads.length === 0) { showToast('No leads to export', 'err'); return; }
+  const headers = ['Name','Contact','Email','Profession','Department','Institute','Scanned At'];
+  const rows = allLeads.map(function(l) {
+    return [l.name, l.contact, l.email, l.profession, l.department, l.institute, l.timestamp]
+      .map(function(v) { return '"' + String(v||'').replace(/"/g,'""') + '"'; }).join(',');
+  });
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = vendorName.replace(/\s+/g,'_') + '_leads.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Exported ' + allLeads.length + ' contacts', 'ok');
+}
+
+// ── Tab Navigation ───────────────────────────────────────────
+function showTab(tab) {
+  if (tab === 'scanner') {
+    showView('scannerView');
+    if (!scannerRunning) startScanner();
+    document.getElementById('tabScanner').classList.add('active');
+    document.getElementById('tabLeads').classList.remove('active');
+  } else {
+    showView('leadsView');
+    stopScanner();
+    loadLeads();
+    document.getElementById('tabLeads2').classList.add('active');
+    document.getElementById('tabScanner2').classList.remove('active');
+  }
+}
+
+function showView(id) {
+  document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
+  document.getElementById(id).classList.add('active');
+}
+
+// ── Logout ───────────────────────────────────────────────────
+function doLogout() {
+  stopScanner();
+  vendorName = null; allLeads = []; currentParticipant = null;
+  document.getElementById('inputUser').value = '';
+  document.getElementById('inputPass').value = '';
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('resultCard').className = 'result-card';
+  showView('loginView');
+  updateCount(0);
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+function showLoading(show) { document.getElementById('loading').classList.toggle('show', show); }
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type||'');
+  setTimeout(function() { t.className = 'toast'; }, 2500);
+}
+</script>
+</body>
+</html>
